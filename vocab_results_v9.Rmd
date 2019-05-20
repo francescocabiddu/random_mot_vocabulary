@@ -1,0 +1,1866 @@
+---
+output:
+  word_document:
+    toc: yes
+    reference_docx: template1.docx
+toc-title: 'Vocabulary paper results (v9) - Mothers random samples'
+
+---
+
+<!-- loading packages, user-defined functions and datasets -->
+```{r echo=FALSE, warning=FALSE, message=FALSE, cache=FALSE, include=FALSE}
+lib <- c("plyr","tidyverse","knitr","gridExtra",
+         "car","kableExtra", "magick", "grid",
+         "magrittr", "janitor")
+lapply(lib, require, character.only = TRUE)
+load(file="ws6.RData")
+
+options(knitr.table.format = 'markdown')
+```
+
+<!-- set folder for graphs -->
+```{r opts, echo = FALSE}
+knitr::opts_chunk$set(
+  fig.path = "images/"
+)
+```
+
+<!-- additional funs -->
+```{r echo = FALSE}
+grid_arrange_shared_legend <- function(..., nrow = 1,y_title, x_size, y_size,widths1 = 2, widths2=0.2,hjust1=1, x_title, ncol = length(list(...)), position = c("bottom", "right")) {
+
+  plots <- list(...)
+  position <- match.arg(position)
+  g <- ggplotGrob(plots[[1]] + theme(legend.position = position))$grobs
+  legend <- g[[which(sapply(g, function(x) x$name) == "guide-box")]]
+  lheight <- sum(legend$height)
+  lwidth <- sum(legend$width)
+  gl <- lapply(plots, function(x) x + theme(legend.position = "none"))
+  gl <- c(gl, nrow = nrow, ncol = ncol)
+
+  combined <- switch(position,
+                     "bottom" = arrangeGrob(do.call(arrangeGrob, gl),
+                                            legend,
+                                            ncol = 1,
+                                            heights = unit.c(unit(1, "npc") - lheight, lheight)),
+                     "right" = arrangeGrob(do.call(arrangeGrob, gl),
+                                           legend,
+                                           ncol = 2,
+                                           widths = c(widths1, widths2),
+                                           left=textGrob(y_title, gp=gpar(fontsize=y_size), rot = 90),
+                                           bottom=textGrob(x_title, gp=gpar(fontsize=x_size), vjust = 0, hjust = hjust1)))
+  grid.newpage()
+  grid.draw(combined)
+
+}
+
+freq_len_pp_fun <- function(df, pp_qu, le, general, freq_df, qus) {
+  df_output <- df %>%
+    (function(x) {
+      tibble(phon = unlist(x$phon),
+             ph_pr = unlist(x$ph_pr))
+    })
+  
+  if (pp_qu == 1) {
+    df_output %<>%
+      filter(ph_pr < pp_qu_subtlex_us_fun26(mot_uni_on_subtlex_us$phon, chi_uni_on_subtlex_us$phon)[2])  # PP qu
+  } else if (pp_qu == 2) {
+    df_output %<>%
+      filter(ph_pr >= pp_qu_subtlex_us_fun26(mot_uni_on_subtlex_us$phon, chi_uni_on_subtlex_us$phon)[2] & ph_pr < pp_qu_subtlex_us_fun26(mot_uni_on_subtlex_us$phon, chi_uni_on_subtlex_us$phon)[3]) # PP qu
+  } else {
+    df_output %<>%
+      filter(ph_pr >= pp_qu_subtlex_us_fun26(mot_uni_on_subtlex_us$phon, chi_uni_on_subtlex_us$phon)[3]) # PP qu
+  }
+    df_output %<>%
+      mutate(len = str_split(phon, "_") %>%
+               sapply(length)) %>%
+      filter(len == le) %>% # LEN
+      mutate(UnTrn = phon)
+    
+    if (general == TRUE) {
+      df_output %<>%
+        mutate(UnTrn = UnTrn %>%
+                 str_replace_all("_", ".") %>%
+                 str_replace_all("UU", "AH"))
+    }
+    
+    df_output %<>%
+      left_join(freq_df, "UnTrn") %>%
+      mutate(freq_qu = ifelse(SFreq < qus[2], 1,
+                              ifelse(SFreq >= qus[2] & SFreq < qus[3], 2,
+                                     ifelse(SFreq >= qus[3], 3, NA)))) %>%
+      na.omit() %>%
+      group_by(freq_qu) %>%
+      summarise(n = n()) %>%
+      ungroup() %>%
+      mutate(perc = (n / sum(n)) * 100) %>%
+      select(-n) %>%
+      mutate(len = le,
+             pp_t = pp_qu) 
+    
+    if (nrow(df_output) != 3) {
+      levs <- unique(df_output$freq_qu)
+      
+      df_output %>%
+        rbind(tibble(freq_qu = c(1:3)[!1:3 %in% levs],
+                     perc = 0,
+                     len = le,
+                     pp_t = pp_qu))
+    } else {
+      df_output
+    }
+}
+
+freq_len_pp_plot <- function(df, df_label, gen_par, df_freq, freq_qu_par, freq_label) {
+  freq_len_pp_fun(df, pp_qu = 1, le = 2, 
+                  general = gen_par, freq_df = df_freq,
+                  qus = freq_qu_par) %>%
+    rbind(freq_len_pp_fun(df, pp_qu = 1, le = 3, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_pp_fun(df, pp_qu = 1, le = 4, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_pp_fun(df, pp_qu = 1, le = 5, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_pp_fun(df, pp_qu = 1, le = 6, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_pp_fun(df, pp_qu = 2, le = 2, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_pp_fun(df, pp_qu = 2, le = 3, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_pp_fun(df, pp_qu = 2, le = 4, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_pp_fun(df, pp_qu = 2, le = 5, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_pp_fun(df, pp_qu = 2, le = 6, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_pp_fun(df, pp_qu = 3, le = 2, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_pp_fun(df, pp_qu = 3, le = 3, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_pp_fun(df, pp_qu = 3, le = 4, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_pp_fun(df, pp_qu = 3, le = 5, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_pp_fun(df, pp_qu = 3, le = 6, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    mutate(len = as.factor(len),
+           freq_qu = ifelse(freq_qu == 1, "T1",
+                            ifelse(freq_qu == 2, "T2", "T3")) %>%
+             as.factor(),
+           pp_t = ifelse(pp_t == 1, "PP T1",
+                         ifelse(pp_t == 2, "PP T2", "PP T3")) %>%
+             as.factor()) %>%
+    rename(`Phonemic length` = len,
+           `Word types (%)` = perc,
+           !!freq_label := freq_qu) %>%
+    (function(x) {
+      if (freq_label == "Frequency") {
+        ggplot(x, aes(`Phonemic length`, `Word types (%)`)) + 
+          geom_bar(aes(fill = `Frequency`), stat = "identity", position = "dodge")+
+          scale_y_continuous(limits=c(0, 100), breaks=seq(0, 100, by = 25))+
+          scale_fill_grey()+
+          theme(axis.text=element_text(size=20),
+                axis.title=element_text(size=20),
+                legend.text = element_text(size=20),
+                legend.title = element_text(size = 20),
+                legend.key.size = unit(1,"cm"),
+                strip.text = element_text(size=20)) +
+          ggtitle(df_label) +
+          theme(plot.title = element_text(hjust = 0.5, size = 25)) +
+          facet_grid(rows = vars(pp_t))
+      } else {
+        ggplot(x, aes(`Phonemic length`, `Word types (%)`)) + 
+          geom_bar(aes(fill = `Mot Frequency`), stat = "identity", position = "dodge")+
+          scale_y_continuous(limits=c(0, 100), breaks=seq(0, 100, by = 25))+
+          scale_fill_grey()+
+          theme(axis.text=element_text(size=20),
+                axis.title=element_text(size=20),
+                legend.text = element_text(size=20),
+                legend.title = element_text(size = 20),
+                legend.key.size = unit(1,"cm"),
+                strip.text = element_text(size=20)) +
+          ggtitle(df_label) +
+          theme(plot.title = element_text(hjust = 0.5, size = 25)) +
+          facet_grid(rows = vars(pp_t))
+      }
+    })
+}
+
+
+
+# frequency at each length, for each ND tertile
+freq_len_nd_fun <- function(df, nd_qu, le, general, freq_df, qus) {
+  df_output <- df %>%
+    (function(x) {
+      tibble(phon = unlist(x$phon),
+             nei = unlist(x$nei))
+    })
+  
+  if (nd_qu == 1) {
+    df_output %<>%
+      filter(nei < nei_qu_fun26(mot_nei_on, chi_nei_on)[2])  # ND qu
+  } else if (nd_qu == 2) {
+    df_output %<>%
+      filter(nei >= nei_qu_fun26(mot_nei_on, chi_nei_on)[2] & nei < nei_qu_fun26(mot_nei_on, chi_nei_on)[3]) # ND qu
+  } else {
+    df_output %<>%
+      filter(nei >= nei_qu_fun26(mot_nei_on, chi_nei_on)[3]) # ND qu
+  }
+  df_output %<>%
+    mutate(len = str_split(phon, "_") %>%
+             sapply(length)) %>%
+    filter(len == le) %>% # LEN
+    mutate(UnTrn = phon)
+  
+  if (general == TRUE) {
+    df_output %<>%
+      mutate(UnTrn = UnTrn %>%
+               str_replace_all("_", ".") %>%
+               str_replace_all("UU", "AH"))
+  }
+  
+  df_output %<>%
+    left_join(freq_df, "UnTrn") %>%
+    mutate(freq_qu = ifelse(SFreq < qus[2], 1,
+                            ifelse(SFreq >= qus[2] & SFreq < qus[3], 2,
+                                   ifelse(SFreq >= qus[3], 3, NA)))) %>%
+    na.omit() %>%
+    group_by(freq_qu) %>%
+    summarise(n = n()) %>%
+    ungroup() %>%
+    mutate(perc = (n / sum(n)) * 100) %>%
+    select(-n) %>%
+    mutate(len = le,
+           nd_t = nd_qu) 
+  
+    if (nrow(df_output) != 3) {
+      levs <- unique(df_output$freq_qu)
+      
+      df_output %>%
+        rbind(tibble(freq_qu = c(1:3)[!1:3 %in% levs],
+                     perc = 0,
+                     len = le,
+                     nd_t = nd_qu))
+    } else {
+      df_output
+    }
+}
+
+freq_len_nd_plot <- function(df, df_label, gen_par, df_freq, freq_qu_par, freq_label) {
+  freq_len_nd_fun(df, nd_qu = 1, le = 2, 
+                  general = gen_par, freq_df = df_freq,
+                  qus = freq_qu_par) %>%
+    rbind(freq_len_nd_fun(df, nd_qu = 1, le = 3, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_nd_fun(df, nd_qu = 1, le = 4, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_nd_fun(df, nd_qu = 1, le = 5, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_nd_fun(df, nd_qu = 1, le = 6, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_nd_fun(df, nd_qu = 2, le = 2, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_nd_fun(df, nd_qu = 2, le = 3, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_nd_fun(df, nd_qu = 2, le = 4, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_nd_fun(df, nd_qu = 2, le = 5, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_nd_fun(df, nd_qu = 2, le = 6, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_nd_fun(df, nd_qu = 3, le = 2, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_nd_fun(df, nd_qu = 3, le = 3, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_nd_fun(df, nd_qu = 3, le = 4, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_nd_fun(df, nd_qu = 3, le = 5, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    rbind(freq_len_nd_fun(df, nd_qu = 3, le = 6, 
+                          general = gen_par, freq_df = df_freq,
+                          qus = freq_qu_par)) %>%
+    mutate(len = as.factor(len),
+           freq_qu = ifelse(freq_qu == 1, "T1",
+                            ifelse(freq_qu == 2, "T2", "T3")) %>%
+             as.factor(),
+           nd_t = ifelse(nd_t == 1, "ND T1",
+                         ifelse(nd_t == 2, "ND T2", "ND T3")) %>%
+             as.factor()) %>%
+    rename(`Phonemic length` = len,
+           `Word types (%)` = perc,
+           !!freq_label := freq_qu) %>%
+    (function(x) {
+      if (freq_label == "Frequency") {
+        ggplot(x, aes(`Phonemic length`, `Word types (%)`)) + 
+          geom_bar(aes(fill = `Frequency`), stat = "identity", position = "dodge")+
+          scale_y_continuous(limits=c(0, 100), breaks=seq(0, 100, by = 25))+
+          scale_fill_grey()+
+          theme(axis.text=element_text(size=20),
+                axis.title=element_text(size=20),
+                legend.text = element_text(size=20),
+                legend.title = element_text(size = 20),
+                legend.key.size = unit(1,"cm"),
+                strip.text = element_text(size=20)) +
+          ggtitle(df_label) +
+          theme(plot.title = element_text(hjust = 0.5, size = 25)) +
+          facet_grid(rows = vars(nd_t))
+      } else {
+        ggplot(x, aes(`Phonemic length`, `Word types (%)`)) + 
+          geom_bar(aes(fill = `Mot Frequency`), stat = "identity", position = "dodge")+
+          scale_y_continuous(limits=c(0, 100), breaks=seq(0, 100, by = 25))+
+          scale_fill_grey()+
+          theme(axis.text=element_text(size=20),
+                axis.title=element_text(size=20),
+                legend.text = element_text(size=20),
+                legend.title = element_text(size = 20),
+                legend.key.size = unit(1,"cm"),
+                strip.text = element_text(size=20)) +
+          ggtitle(df_label) +
+          theme(plot.title = element_text(hjust = 0.5, size = 25)) +
+          facet_grid(rows = vars(nd_t))
+      }
+    })
+
+}
+
+
+# pp at each length, for each general/maternal tertile
+pp_len_freq_fun <- function(df, le, df_freq, freq_qs, f_qu, general) {
+  df_output <- df %>%
+    (function(x) {
+      tibble(phon = unlist(x$phon),
+             ph_pr = unlist(x$ph_pr))
+    }) %>%
+    mutate(len = str_split(phon, "_") %>%
+             sapply(length)) %>%
+    filter(len == le) %>% # LEN
+    mutate(UnTrn = phon)
+  
+  if (general == TRUE) {
+    df_output %<>%
+      mutate(UnTrn = UnTrn %>%
+               str_replace_all("_", ".") %>%
+               str_replace_all("UU", "AH"))
+  }
+  
+  df_output %<>%
+    left_join(df_freq, "UnTrn") %>%
+    mutate(freq_qu = ifelse(SFreq < freq_qs[2], 1,
+                            ifelse(SFreq >= freq_qs[2] & SFreq < freq_qs[3], 2,
+                                   ifelse(SFreq >= freq_qs[3], 3, NA))))
+  
+  if (f_qu == 1) {
+    df_output %<>%
+      filter(freq_qu == 1)  # freq qu
+  } else if (f_qu == 2) {
+    df_output %<>%
+      filter(freq_qu == 2)  # freq qu
+  } else {
+    df_output %<>%
+      filter(freq_qu == 3)  # freq qu
+  }
+  
+  
+  df_output %<>%
+    mutate(pp_qu = ifelse(ph_pr < pp_qu_subtlex_us_fun26(mot_uni_on_subtlex_us$phon, chi_uni_on_subtlex_us$phon)[2], 1,
+                          ifelse(ph_pr >= pp_qu_subtlex_us_fun26(mot_uni_on_subtlex_us$phon, chi_uni_on_subtlex_us$phon)[2] & ph_pr < pp_qu_subtlex_us_fun26(mot_uni_on_subtlex_us$phon, chi_uni_on_subtlex_us$phon)[3], 2,
+                                 ifelse(ph_pr >= pp_qu_subtlex_us_fun26(mot_uni_on_subtlex_us$phon, chi_uni_on_subtlex_us$phon)[3], 3, NA)))) %>%
+    na.omit() %>%
+    group_by(pp_qu) %>%
+    summarise(n = n()) %>%
+    ungroup() %>%
+    mutate(len = le,
+           freq_t = f_qu) 
+  
+  if (nrow(df_output) != 3) {
+    levs <- unique(df_output$pp_qu)
+    
+    df_output %>%
+      rbind(tibble(pp_qu = c(1:3)[!1:3 %in% levs],
+                   n = 0,
+                   len = le,
+                   freq_t = f_qu))
+  } else {
+    df_output
+  }
+  
+}
+
+pp_len_freq_plot <- function(df_plot, freq_df, f_qs, gnrl, df_label, mot_label) {
+  pp_len_freq_fun(df = df_plot, le = 2, df_freq = freq_df, 
+                  freq_qs = f_qs, f_qu = 1, general = gnrl) %>%
+    rbind(pp_len_freq_fun(df = df_plot, le = 3, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 1, general = gnrl)) %>%
+    rbind(pp_len_freq_fun(df = df_plot, le = 4, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 1, general = gnrl)) %>%
+    rbind(pp_len_freq_fun(df = df_plot, le = 5, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 1, general = gnrl)) %>%
+    rbind(pp_len_freq_fun(df = df_plot, le = 6, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 1, general = gnrl)) %>%
+    rbind(pp_len_freq_fun(df = df_plot, le = 2, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 2, general = gnrl)) %>%
+    rbind(pp_len_freq_fun(df = df_plot, le = 3, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 2, general = gnrl)) %>%
+    rbind(pp_len_freq_fun(df = df_plot, le = 4, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 2, general = gnrl)) %>%
+    rbind(pp_len_freq_fun(df = df_plot, le = 5, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 2, general = gnrl)) %>%
+    rbind(pp_len_freq_fun(df = df_plot, le = 6, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 2, general = gnrl)) %>%
+    rbind(pp_len_freq_fun(df = df_plot, le = 2, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 3, general = gnrl)) %>%
+    rbind(pp_len_freq_fun(df = df_plot, le = 3, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 3, general = gnrl)) %>%
+    rbind(pp_len_freq_fun(df = df_plot, le = 4, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 3, general = gnrl)) %>%
+    rbind(pp_len_freq_fun(df = df_plot, le = 5, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 3, general = gnrl)) %>%
+    rbind(pp_len_freq_fun(df = df_plot, le = 6, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 3, general = gnrl)) %>%
+    mutate(len = as.factor(len),
+           pp_qu = ifelse(pp_qu == 1, "T1",
+                          ifelse(pp_qu == 2, "T2", "T3")) %>%
+             as.factor(),
+           freq_t = ifelse(freq_t == 1, paste(mot_label, "Freq T1", sep = ""),
+                           ifelse(freq_t == 2, paste(mot_label, "Freq T2", sep = ""), 
+                                  paste(mot_label, "Freq T3", sep = ""))) %>%
+             as.factor()) %>%
+    rename(`Phonemic length` = len,
+           `Novel words` = n,
+           PP = pp_qu) %>%
+    (function(x) {
+      ggplot(x, aes(`Phonemic length`, `Novel words`)) + 
+        geom_bar(aes(fill = `PP`), stat = "identity", position = "dodge")+
+        scale_fill_grey()+
+        theme(axis.text=element_text(size=20),
+              axis.title=element_text(size=20),
+              legend.text = element_text(size=20),
+              legend.title = element_text(size = 20),
+              legend.key.size = unit(1,"cm"),
+              strip.text = element_text(size=15)) +
+        ggtitle(df_label) +
+        theme(plot.title = element_text(hjust = 0.5, size = 25)) +
+        facet_grid(rows = vars(freq_t))
+    })
+}
+
+
+# nd at each length, for each general/maternal tertile
+nd_len_freq_fun <- function(df, le, df_freq, freq_qs, f_qu, general) {
+  df_output <- df %>%
+    (function(x) {
+      tibble(phon = unlist(x$phon),
+             nei = unlist(x$nei))
+    }) %>%
+    mutate(len = str_split(phon, "_") %>%
+             sapply(length)) %>%
+    filter(len == le) %>% # LEN
+    mutate(UnTrn = phon)
+  
+  if (general == TRUE) {
+    df_output %<>%
+      mutate(UnTrn = UnTrn %>%
+               str_replace_all("_", ".") %>%
+               str_replace_all("UU", "AH"))
+  }
+  
+  df_output %<>%
+    left_join(df_freq, "UnTrn") %>%
+    mutate(freq_qu = ifelse(SFreq < freq_qs[2], 1,
+                            ifelse(SFreq >= freq_qs[2] & SFreq < freq_qs[3], 2,
+                                   ifelse(SFreq >= freq_qs[3], 3, NA))))
+  
+  if (f_qu == 1) {
+    df_output %<>%
+      filter(freq_qu == 1)  # freq qu
+  } else if (f_qu == 2) {
+    df_output %<>%
+      filter(freq_qu == 2)  # freq qu
+  } else {
+    df_output %<>%
+      filter(freq_qu == 3)  # freq qu
+  }
+  
+  
+  df_output %<>%
+    mutate(nd_qu = ifelse(nei < nei_qu_fun26(mot_nei_on, chi_nei_on)[2], 1,
+                          ifelse(nei >= nei_qu_fun26(mot_nei_on, chi_nei_on)[2] & nei < nei_qu_fun26(mot_nei_on, chi_nei_on)[3], 2,
+                                 ifelse(nei >= nei_qu_fun26(mot_nei_on, chi_nei_on)[3], 3, NA)))) %>%
+    na.omit() %>%
+    group_by(nd_qu) %>%
+    summarise(n = n()) %>%
+    ungroup() %>%
+    mutate(len = le,
+           freq_t = f_qu) 
+  
+  if (nrow(df_output) != 3) {
+    levs <- unique(df_output$nd_qu)
+    
+    df_output %>%
+      rbind(tibble(nd_qu = c(1:3)[!1:3 %in% levs],
+                   n = 0,
+                   len = le,
+                   freq_t = f_qu))
+  } else {
+    df_output
+  }
+  
+}
+
+nd_len_freq_plot <- function(df_plot, freq_df, f_qs, gnrl, df_label, mot_label) {
+  nd_len_freq_fun(df = df_plot, le = 2, df_freq = freq_df, 
+                  freq_qs = f_qs, f_qu = 1, general = gnrl) %>%
+    rbind(nd_len_freq_fun(df = df_plot, le = 3, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 1, general = gnrl)) %>%
+    rbind(nd_len_freq_fun(df = df_plot, le = 4, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 1, general = gnrl)) %>%
+    rbind(nd_len_freq_fun(df = df_plot, le = 5, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 1, general = gnrl)) %>%
+    rbind(nd_len_freq_fun(df = df_plot, le = 6, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 1, general = gnrl)) %>%
+    rbind(nd_len_freq_fun(df = df_plot, le = 2, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 2, general = gnrl)) %>%
+    rbind(nd_len_freq_fun(df = df_plot, le = 3, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 2, general = gnrl)) %>%
+    rbind(nd_len_freq_fun(df = df_plot, le = 4, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 2, general = gnrl)) %>%
+    rbind(nd_len_freq_fun(df = df_plot, le = 5, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 2, general = gnrl)) %>%
+    rbind(nd_len_freq_fun(df = df_plot, le = 6, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 2, general = gnrl)) %>%
+    rbind(nd_len_freq_fun(df = df_plot, le = 2, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 3, general = gnrl)) %>%
+    rbind(nd_len_freq_fun(df = df_plot, le = 3, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 3, general = gnrl)) %>%
+    rbind(nd_len_freq_fun(df = df_plot, le = 4, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 3, general = gnrl)) %>%
+    rbind(nd_len_freq_fun(df = df_plot, le = 5, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 3, general = gnrl)) %>%
+    rbind(nd_len_freq_fun(df = df_plot, le = 6, df_freq = freq_df, 
+                          freq_qs = f_qs, f_qu = 3, general = gnrl)) %>%
+    mutate(len = as.factor(len),
+           nd_qu = ifelse(nd_qu == 1, "T1",
+                          ifelse(nd_qu == 2, "T2", "T3")) %>%
+             as.factor(),
+           freq_t = ifelse(freq_t == 1, paste(mot_label, "Freq T1", sep = ""),
+                           ifelse(freq_t == 2, paste(mot_label, "Freq T2", sep = ""), 
+                                  paste(mot_label, "Freq T3", sep = ""))) %>%
+             as.factor()) %>%
+    rename(`Phonemic length` = len,
+           `Novel words` = n,
+           ND = nd_qu) %>%
+    (function(x) {
+      ggplot(x, aes(`Phonemic length`, `Novel words`)) + 
+        geom_bar(aes(fill = `ND`), stat = "identity", position = "dodge")+
+        scale_fill_grey()+
+        theme(axis.text=element_text(size=20),
+              axis.title=element_text(size=20),
+              legend.text = element_text(size=20),
+              legend.title = element_text(size = 20),
+              legend.key.size = unit(1,"cm"),
+              strip.text = element_text(size=15)) +
+        ggtitle(df_label) +
+        theme(plot.title = element_text(hjust = 0.5, size = 25)) +
+        facet_grid(rows = vars(freq_t))
+    })
+}
+
+
+# frequency tertiles for lenghts 2 to 6
+freq_qu_fun26 <- function(df_var1, df_var2, general) {
+  tibble(phon = c(df_var1 %>% 
+                    unlist(), 
+                  df_var2 %>% 
+                    unlist())) %>%
+    mutate(len = str_split(phon, "_") %>%
+             sapply(length)) %>%
+    filter(len >= 2 & len <= 6) %>%
+    (function(x) {
+      if (general == TRUE) {
+        iphod_freq %>%
+          filter(UnTrn %in% (x$phon %>%
+                               str_replace_all("_", ".") %>%
+                               str_replace_all("UU", "AH"))) %>%
+          .$SFreq %>%
+          quantile(probs = c(0, 1/3, 2/3, 1), na.rm = TRUE)
+      } else {
+        mot_freq %>%
+          filter(UnTrn %in% x$phon) %>%
+          .$SFreq %>%
+          quantile(probs = c(0, 1/3, 2/3, 1), na.rm = TRUE)
+      }
+    })
+}
+
+# ND tertiles for 2-6 lengths
+nei_qu_fun26 <- function(df_var1, df_var2) {
+  tibble(phon = c(df_var1 %>% 
+                    unlist(), 
+                  df_var2 %>% 
+                    unlist())) %>%
+    mutate(len = str_split(phon, "_") %>%
+             sapply(length)) %>%
+    filter(len >= 2 & len <= 6) %>%
+    (function(x) {
+        online %>%
+          filter(phon %in% x$phon) %>%
+          .$nei %>%
+          quantile(probs = c(0, 1/3, 2/3, 1), na.rm = TRUE)
+
+    })
+}
+
+# PP tertiles for 2-6 lengths
+pp_qu_subtlex_us_fun26 <- function(df_var1, df_var2) {
+  tibble(phon = c(df_var1 %>% 
+                    unlist(), 
+                  df_var2 %>% 
+                    unlist())) %>%
+    mutate(len = str_split(phon, "_") %>%
+             sapply(length)) %>%
+    filter(len >= 2 & len <= 6) %>%
+    (function(x) {
+      subtlex_us_pp %>%
+        filter(Input %in% (x$phon %>%
+                             str_replace_all("_", ".") %>%
+                             str_replace_all("UU", "AH"))) %>%
+        .$unsLBPAV %>%
+        quantile(probs = c(0, 1/3, 2/3, 1), na.rm = TRUE)
+  })
+} 
+
+summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
+                      conf.interval=.95, .drop=TRUE) {
+  
+  # New version of length which can handle NA's: if na.rm==T, don't count them
+  length2 <- function (x, na.rm=FALSE) {
+    if (na.rm) sum(!is.na(x))
+    else       length(x)
+  }
+  
+  # This does the summary. For each group's data frame, return a vector with
+  # N, mean, and sd
+  datac <- plyr::ddply(data, groupvars, .drop=.drop,
+                       .fun = function(xx, col) {
+                         c(N    = length2(xx[[col]], na.rm=na.rm),
+                           mean = mean   (xx[[col]], na.rm=na.rm),
+                           sd   = sd     (xx[[col]], na.rm=na.rm)
+                         )
+                       },
+                       measurevar
+  )
+  
+  # Rename the "mean" column    
+  datac <- plyr::rename(datac, c("mean" = measurevar))
+  
+  datac$se <- datac$sd / sqrt(datac$N)  # Calculate standard error of the mean
+  
+  # Confidence interval multiplier for standard error
+  # Calculate t-statistic for confidence interval: 
+  # e.g., if conf.interval is .95, use .975 (above/below), and use df=N-1
+  ciMult <- qt(conf.interval/2 + .5, datac$N-1)
+  datac$ci <- datac$se * ciMult
+  
+  return(datac)
+}
+```
+<br>
+
+# Log changes
+
+<br>
+
+Simple effects: children and models are now compared to 10 maternal random token samples matched with children's tokens.
+
+<br>
+
+Bar charts: each bar showed a total sum before. Now they represent an average (using the 12 children samples) and including Standard Error of the mean.
+
+<br>
+
+# 1. Basic results
+
+10 samples of the maternal input were created, randomly excluding 1% of word tokens from each stage (1 to 20) until a sample approximately matched children's total number of tokens. 
+
+<br>
+
+
+
+#### Table 1
+Children and Mothers (10 random samples) types and tokens in 1000s. The random samples have the same number of tokens but not exactly the same number of word types (because different words populate the samples; although the general mean for word types still matches).
+
+```{r echo = FALSE, results='asis', warning=FALSE}
+mot_counts <- function(df1, df2) {
+  (df1$cum_uni[which(chi_uni$section == 20)] / 1000) %>%
+         round(1) %>%
+         paste(paste(",", df2 %>% 
+         group_by(baby) %>% 
+         filter(row_number() == 1) %>% 
+         {.$mot_n_tokens %>% 
+             {(. / 1000) %>%
+                 round(1)}}, sep = " "), sep = "") %>%
+    c(mean(df1$cum_uni[which(chi_uni$section == 20)] / 1000) %>%
+        round(1) %>%
+         paste(paste(",", df2 %>% 
+         group_by(baby) %>% 
+         filter(row_number() == 1) %>% 
+         {.$mot_n_tokens %>% 
+             {(. / 1000) %>%
+                 round(1)}} %>%
+           mean(), sep = " "), sep = ""))
+}
+
+
+tibble(Subject = unique(chi_uni$baby),
+        Chi_types = chi_uni$cum_uni[which(chi_uni$section == 20)] / 1000,
+        Chi_tokens = mot_chi_na %>% 
+        filter(id == "CHI") %>% 
+        group_by(baby) %>% 
+        summarise(Chi_tokens = string %>% 
+                 unlist() %>% length() %>% {. / 1000}) %>%
+        (function(x) {
+        x$Chi_tokens
+        })) %>% 
+  bind_rows(summarise_all(., funs(if(is.numeric(.)) mean(., na.rm = TRUE) else "MEAN"))) %>%
+  round_df(1) %>%
+  unite("Children", c("Chi_types", "Chi_tokens"), sep = ", ") %>%
+  cbind(tibble(Mot1 = mot_counts(mot_uni_random$df_1, mot_token_samples$df_1),
+       Mot2 = mot_counts(mot_uni_random$df_2, mot_token_samples$df_2),
+       Mot3 = mot_counts(mot_uni_random$df_3, mot_token_samples$df_3),
+       Mot4 = mot_counts(mot_uni_random$df_4, mot_token_samples$df_4),
+       Mot5 = mot_counts(mot_uni_random$df_5, mot_token_samples$df_5),
+       Mot6 = mot_counts(mot_uni_random$df_6, mot_token_samples$df_6),
+       Mot7 = mot_counts(mot_uni_random$df_7, mot_token_samples$df_7),
+       Mot8 = mot_counts(mot_uni_random$df_8, mot_token_samples$df_8),
+       Mot9 = mot_counts(mot_uni_random$df_9, mot_token_samples$df_9),
+       Mot10 = mot_counts(mot_uni_random$df_10, mot_token_samples$df_10))) %>%
+  kable()
+```
+
+<br>
+
+#### Table 2
+t test comparing maternal sample and children's total number of tokens (N = 12). The values are the same for each comparison because the random samples have the same total number of tokens (however different word tokens populate the samples; see Table 1 and 3).
+
+```{r echo = FALSE, results='asis', warning=FALSE}
+comparison_tokens <- function(df, df_num) {
+  df %>%
+  group_by(baby) %>%
+  filter(row_number() == 1) %>%
+  ungroup() %>%
+  (function(x) {
+    test <- t.test(x$chi_n_tokens, x$mot_n_tokens)
+    
+    tibble(
+      Comparison = paste("Chi, Mot", df_num, sep = ""),
+      t = test$statistic %>% 
+        round(2),
+      p = test$p.value %>% 
+        round(3),
+      `95% CI` = test$conf.int %>% 
+        round(2) %>% 
+        paste(collapse = ", ")
+    )
+    
+  })
+}
+
+rbind(comparison_tokens(mot_token_samples$df_1, "1"),
+      comparison_tokens(mot_token_samples$df_2, "2"),
+      comparison_tokens(mot_token_samples$df_3, "3"),
+      comparison_tokens(mot_token_samples$df_4, "4"),
+      comparison_tokens(mot_token_samples$df_5, "5"),
+      comparison_tokens(mot_token_samples$df_6, "6"),
+      comparison_tokens(mot_token_samples$df_7, "7"),
+      comparison_tokens(mot_token_samples$df_8, "8"),
+      comparison_tokens(mot_token_samples$df_9, "9"),
+      comparison_tokens(mot_token_samples$df_10, "10")) %>%
+  kable()
+```
+
+<br>
+
+#### Table 3 
+Word types produced (mean and standard deviation) by children, models and mothers (10 random samples), for each stage of the input.
+
+```{r echo = FALSE, warning=FALSE}
+summary_words <- function(df) {
+  df %>%
+    group_by(section) %>%
+    summarise(avg_n_uni = mean(n_uni),
+              sd_n_uni = sd(n_uni)) %>%
+    ungroup() %>%
+    round_df(0) %>%
+    unite(avg_sd, c(avg_n_uni, sd_n_uni), sep = " ") %>%
+    mutate(avg_sd = avg_sd %>%
+             str_replace(" ", " (") %>%
+             str_replace("$", ")")) %>%
+    .$avg_sd
+}
+
+tibble(Stage = 1:20, 
+       Children = chi_uni %>%
+         summary_words(),
+       Models = mod %>%
+         summary_words(),
+       Mothers1 = mot_uni_random$df_1 %>%
+         summary_words(),
+       Mothers2 = mot_uni_random$df_2 %>%
+         summary_words(),
+       Mothers3 = mot_uni_random$df_3 %>%
+         summary_words(),
+       Mothers4 = mot_uni_random$df_4 %>%
+         summary_words(),
+       Mothers5 = mot_uni_random$df_5 %>%
+         summary_words(),
+       Mothers6 = mot_uni_random$df_6 %>%
+         summary_words(),
+       Mothers7 = mot_uni_random$df_7 %>%
+         summary_words(),
+       Mothers8 = mot_uni_random$df_8 %>%
+         summary_words(),
+       Mothers9 = mot_uni_random$df_9 %>%
+         summary_words(),
+       Mothers10 = mot_uni_random$df_10 %>%
+         summary_words()) %>%
+  kable()
+```
+
+
+<br>
+
+<br>
+
+# 2. Mothers/Children/Models
+
+## 2.1 Simple effects
+
+The proportion of cumulative number of words produced was considered. Proportions are calculated over the overall number of words produced by each subject/model **at each stage considered**.
+
+<br>
+
+### 2.1.1 Syllabic Length
+
+```{r 211_syll_length, echo = FALSE, results='asis', fig.width=16, fig.height=9}
+chi_uni %>% 
+  mutate(dataset = "Children") %>%
+  select(baby, section, len_1_perc:len_3_perc, dataset) %>%
+  rbind(mot_uni_random$df_10 %>%
+          mutate(dataset = "Mothers") %>%
+  select(baby, section, len_1_perc:len_3_perc, dataset)) %>%
+  rbind(mod %>%
+          mutate(dataset = "Models") %>%
+  select(baby, section, len_1_perc:len_3_perc, dataset)) %>% 
+  mutate(dataset = factor(dataset, 
+                          levels=c("Mothers","Children","Models"), 
+                          labels=c("Mothers","Children","Models"))) %>%
+  ggplot(aes(x=section, y=len_1_perc, fill=baby, shape="1")) + 
+  geom_point(size=4, alpha=0.2) +
+  scale_x_continuous(breaks=c(1, seq(5,20, 5))) +
+  labs(x = "Stage", y = "Word types (%)") +
+  ggtitle("") +
+  theme(plot.title = element_text(hjust = 0.5, size = 25)) +
+  geom_point(aes(x=section, y=len_2_perc, fill=baby, shape="2"),size=4, alpha=0.2) + 
+  geom_point(aes(x=section, y=len_3_perc, fill=baby, shape="3"), size=4,alpha=0.2) + 
+  scale_shape_manual("Syllabic length", values=c(`1`= 0, `2`= 3, `3` = 2),
+                     breaks=c("1","2", "3"))+
+  guides(fill=FALSE)+
+  geom_smooth(aes(x=section, y=len_1_perc,linetype="1"), fill=NA, colour="black", method="lm", size=0.8)+
+  geom_smooth(aes(x=section, y=len_2_perc,linetype="2"), fill=NA, colour="black", method="lm", size=0.8)+
+  geom_smooth(aes(x=section, y=len_3_perc,linetype="3"), fill=NA, colour="black", method="lm", size=0.8)+
+  theme(axis.text=element_text(size=18),  
+        axis.title = element_text(size=30),
+        legend.text = element_text(size = 20),         
+        legend.title = element_text(size = 20),  
+        strip.text = element_text(size=35),
+        legend.key.size = unit(2, "cm"),
+        axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)))+     
+    scale_colour_grey(start = 0, end = .9)+
+  scale_linetype_manual("Syllabic length", 
+                        values=c(`1` = "longdash",`2` = "solid", `3`= "dotted"),
+                        breaks=c("1","2", "3"))+
+  scale_y_continuous(limits=c(0, 100), breaks=seq(0, 100, by = 20)) +
+  facet_grid(cols = vars(dataset))
+  
+```
+
+**Figure .** Cumulative proportion of unique words (e.g., those words produced at stage 3 that were not present in any previous stage) that are one-syllable, two-syllable, and three-syllable at each stage of the mother and child transcriptions and model’s learning. **Mothers random sample number 10 is used**.
+
+<br>
+
+```{r 211_syll_length_random, echo = FALSE, results='asis', fig.width=16, fig.height=14}
+mot_uni_random$df_1 %>% 
+  mutate(dataset = "Mothers 1") %>%
+  select(baby, section, len_1_perc:len_3_perc, dataset) %>%
+  rbind(mot_uni_random$df_2 %>%
+          mutate(dataset = "Mothers 2") %>%
+  select(baby, section, len_1_perc:len_3_perc, dataset)) %>%
+  rbind(mot_uni_random$df_3 %>%
+          mutate(dataset = "Mothers 3") %>%
+          select(baby, section, len_1_perc:len_3_perc, dataset)) %>%
+  rbind(mot_uni_random$df_4 %>%
+          mutate(dataset = "Mothers 4") %>%
+  select(baby, section, len_1_perc:len_3_perc, dataset)) %>%
+  rbind(mot_uni_random$df_5 %>%
+          mutate(dataset = "Mothers 5") %>%
+          select(baby, section, len_1_perc:len_3_perc, dataset)) %>%
+  rbind(mot_uni_random$df_6 %>%
+          mutate(dataset = "Mothers 6") %>%
+          select(baby, section, len_1_perc:len_3_perc, dataset)) %>%
+  rbind(mot_uni_random$df_7 %>%
+          mutate(dataset = "Mothers 7") %>%
+          select(baby, section, len_1_perc:len_3_perc, dataset)) %>%
+  rbind(mot_uni_random$df_8 %>%
+          mutate(dataset = "Mothers 8") %>%
+          select(baby, section, len_1_perc:len_3_perc, dataset)) %>%
+  rbind(mot_uni_random$df_9 %>%
+          mutate(dataset = "Mothers 9") %>%
+          select(baby, section, len_1_perc:len_3_perc, dataset)) %>%
+  rbind(mot_uni_random$df_10 %>%
+          mutate(dataset = "Mothers 10") %>%
+          select(baby, section, len_1_perc:len_3_perc, dataset)) %>%
+  mutate(dataset = factor(dataset, 
+                          levels=c("Mothers 1","Mothers 2","Mothers 3",
+                                   "Mothers 4","Mothers 5","Mothers 6",
+                                   "Mothers 7","Mothers 8","Mothers 9",
+                                   "Mothers 10"), 
+                          labels=c("Mothers 1","Mothers 2","Mothers 3",
+                                   "Mothers 4","Mothers 5","Mothers 6",
+                                   "Mothers 7","Mothers 8","Mothers 9",
+                                   "Mothers 10"))) %>%
+  ggplot(aes(x=section, y=len_1_perc, fill=baby, shape="1")) + 
+  geom_point(size=4, alpha=0.2) +
+  scale_x_continuous(breaks=c(1, seq(5,20, 5))) +
+  labs(x = "Stage", y = "Word types (%)") +
+  ggtitle("") +
+  theme(plot.title = element_text(hjust = 0.5, size = 25)) +
+  geom_point(aes(x=section, y=len_2_perc, fill=baby, shape="2"),size=4, alpha=0.2) + 
+  geom_point(aes(x=section, y=len_3_perc, fill=baby, shape="3"), size=4,alpha=0.2) + 
+  scale_shape_manual("Syllabic length", values=c(`1`= 0, `2`= 3, `3` = 2),
+                     breaks=c("1","2", "3"))+
+  guides(fill=FALSE)+
+  geom_smooth(aes(x=section, y=len_1_perc,linetype="1"), fill=NA, colour="black", method="lm", size=0.8)+
+  geom_smooth(aes(x=section, y=len_2_perc,linetype="2"), fill=NA, colour="black", method="lm", size=0.8)+
+  geom_smooth(aes(x=section, y=len_3_perc,linetype="3"), fill=NA, colour="black", method="lm", size=0.8)+
+  theme(axis.text=element_text(size=18),  
+        axis.title = element_text(size=30),
+        legend.text = element_text(size = 20),         
+        legend.title = element_text(size = 20),  
+        strip.text = element_text(size=35),
+        legend.key.size = unit(2, "cm"),
+        axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)))+     
+    scale_colour_grey(start = 0, end = .9)+
+  scale_linetype_manual("Syllabic length", 
+                        values=c(`1` = "longdash",`2` = "solid", `3`= "dotted"),
+                        breaks=c("1","2", "3"))+
+  scale_y_continuous(limits=c(0, 100), breaks=seq(0, 100, by = 20)) +
+  facet_wrap(vars(dataset))
+```
+**Figure .** Cumulative proportion of word types by syllabic length at each stage of the mothers random samples.
+
+<br>
+
+### 2.1.2 Phonemic Length
+
+```{r 212_phon_length, echo = FALSE, results='asis', fig.width=16, fig.height=9}
+chi_uni %>% 
+  mutate(dataset = "Children") %>%
+  select(baby, section, len2_2_perc, len2_3_perc:len2_8_perc, dataset) %>%
+  rbind(mot_uni_random$df_10 %>%
+          mutate(dataset = "Mothers") %>%
+  select(baby, section, len2_2_perc, len2_3_perc:len2_8_perc, dataset)) %>%
+  rbind(mod %>%
+          mutate(dataset = "Models") %>%
+  select(baby, section, len2_2_perc, len2_3_perc:len2_8_perc, dataset)) %>% 
+  mutate(dataset = factor(dataset, 
+                          levels=c("Mothers","Children","Models"), 
+                          labels=c("Mothers","Children","Models"))) %>%
+  ggplot(aes(x=section, y=len2_3_perc, fill=baby, shape="3")) + 
+  geom_point(size=3.5, alpha=0.2) +
+  scale_x_continuous(breaks=c(1, seq(5,20, 5))) +
+  labs(x = "Stage", y = "Word types (%)") +
+  ggtitle("") +
+  theme(plot.title = element_text(hjust = 0.5, size=25)) +
+  geom_point(aes(x=section, y=len2_4_perc, fill=baby, shape="4"),size=3.5,alpha=0.2) + 
+  geom_point(aes(x=section, y=len2_5_perc, fill=baby, shape="5"),size=3.5,alpha=0.2) + 
+  geom_point(aes(x=section, y=len2_6_perc, fill=baby, shape="6"),size=3.5,alpha=0.2) + 
+  geom_point(aes(x=section, y=len2_7_perc, fill=baby, shape="7"),size=3.5,alpha=0.2) + 
+  geom_point(aes(x=section, y=len2_8_perc, fill=baby, shape="8"),size=3.5,alpha=0.2) + 
+  geom_point(aes(x=section, y=len2_2_perc, fill=baby, shape="2"),size=3.5,alpha=0.2) + 
+  scale_shape_manual("Phonemic length", values=c(`3`= 0, `4`= 3, `2` = 6, `5` = 2,
+                                        `6` = 1, `7` = 4, `8` = 5),
+                        breaks= c("3", "4","5" , "2", "6", "7", "8"))+
+  scale_y_continuous(limits=c(0, 50), breaks=seq(0, 50, by = 10))+
+  guides(fill=FALSE, alpha=F)+
+  geom_smooth(aes(x=section, y=len2_3_perc,linetype="3"), fill=NA, colour="black", method="lm",size=1)+
+  geom_smooth(aes(x=section, y=len2_4_perc,linetype="4"), fill=NA, colour="black", method="lm",size=1)+
+  geom_smooth(aes(x=section, y=len2_5_perc,linetype="5"), fill=NA, colour="black", method="lm",size=1)+
+  geom_smooth(aes(x=section, y=len2_6_perc,linetype="6"), fill=NA, colour="black", method="lm",size=1)+
+  geom_smooth(aes(x=section, y=len2_7_perc,linetype="7"), fill=NA, colour="black", method="lm",size=1)+
+  geom_smooth(aes(x=section, y=len2_8_perc,linetype="8"), fill=NA, colour="black", method="lm",size=1)+
+  geom_smooth(aes(x=section, y=len2_2_perc,linetype="2"), fill=NA, colour="black", method="lm",size=1)+
+ theme(axis.text=element_text(size=18),  
+        axis.title = element_text(size=30),
+        legend.text = element_text(size = 20),         
+        legend.title = element_text(size = 20),  
+        strip.text = element_text(size=35),
+        legend.key.size = unit(2, "cm"),
+        axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)))+     
+  scale_colour_grey(start = 0, end = .9)+
+  scale_linetype_manual("Phonemic length", values=c(`3`= "dotted", `4`= "solid", `2`= "4C88C488", `5` = "dashed",
+                                        `6` = "12345678", `7` = "1F", `8` = "dotdash"),
+                        breaks= c("3", "4", "5","2", "6", "7", "8")) +
+  facet_grid(cols = vars(dataset))
+```
+
+**Figure .** Cumulative proportion of unique words (e.g., those words produced at stage 3 that were not present in any previous stage) of two to eight phonemes at each stage of the mother and child transcriptions and model’s learning. **Mothers random sample number 10 is used**
+
+<br>
+
+```{r 212_phon_length_random, echo = FALSE, results='asis', fig.width=16, fig.height=14}
+mot_uni_random$df_1 %>% 
+  mutate(dataset = "Mothers 1") %>%
+  select(baby, section, len2_2_perc, len2_3_perc:len2_8_perc, dataset) %>%
+  rbind(mot_uni_random$df_2 %>%
+          mutate(dataset = "Mothers 2") %>%
+  select(baby, section, len2_2_perc, len2_3_perc:len2_8_perc, dataset)) %>%
+  rbind(mot_uni_random$df_3 %>%
+          mutate(dataset = "Mothers 3") %>%
+  select(baby, section, len2_2_perc, len2_3_perc:len2_8_perc, dataset)) %>%
+  rbind(mot_uni_random$df_4 %>%
+          mutate(dataset = "Mothers 4") %>%
+  select(baby, section, len2_2_perc, len2_3_perc:len2_8_perc, dataset)) %>%
+  rbind(mot_uni_random$df_5 %>%
+          mutate(dataset = "Mothers 5") %>%
+  select(baby, section, len2_2_perc, len2_3_perc:len2_8_perc, dataset)) %>%
+  rbind(mot_uni_random$df_6 %>%
+          mutate(dataset = "Mothers 6") %>%
+  select(baby, section, len2_2_perc, len2_3_perc:len2_8_perc, dataset)) %>%
+  rbind(mot_uni_random$df_7 %>%
+          mutate(dataset = "Mothers 7") %>%
+  select(baby, section, len2_2_perc, len2_3_perc:len2_8_perc, dataset)) %>%
+  rbind(mot_uni_random$df_8 %>%
+          mutate(dataset = "Mothers 8") %>%
+  select(baby, section, len2_2_perc, len2_3_perc:len2_8_perc, dataset)) %>%
+  rbind(mot_uni_random$df_9 %>%
+          mutate(dataset = "Mothers 9") %>%
+  select(baby, section, len2_2_perc, len2_3_perc:len2_8_perc, dataset)) %>%
+  rbind(mot_uni_random$df_10 %>%
+          mutate(dataset = "Mothers 10") %>%
+  select(baby, section, len2_2_perc, len2_3_perc:len2_8_perc, dataset)) %>%
+  mutate(dataset = factor(dataset, 
+                          levels=c("Mothers 1","Mothers 2","Mothers 3",
+                                   "Mothers 4","Mothers 5","Mothers 6",
+                                   "Mothers 7","Mothers 8","Mothers 9",
+                                   "Mothers 10"), 
+                          labels=c("Mothers 1","Mothers 2","Mothers 3",
+                                   "Mothers 4","Mothers 5","Mothers 6",
+                                   "Mothers 7","Mothers 8","Mothers 9",
+                                   "Mothers 10"))) %>%
+  ggplot(aes(x=section, y=len2_3_perc, fill=baby, shape="3")) + 
+  geom_point(size=3.5, alpha=0.2) +
+  scale_x_continuous(breaks=c(1, seq(5,20, 5))) +
+  labs(x = "Stage", y = "Word types (%)") +
+  ggtitle("") +
+  theme(plot.title = element_text(hjust = 0.5, size=25)) +
+  geom_point(aes(x=section, y=len2_4_perc, fill=baby, shape="4"),size=3.5,alpha=0.2) + 
+  geom_point(aes(x=section, y=len2_5_perc, fill=baby, shape="5"),size=3.5,alpha=0.2) + 
+  geom_point(aes(x=section, y=len2_6_perc, fill=baby, shape="6"),size=3.5,alpha=0.2) + 
+  geom_point(aes(x=section, y=len2_7_perc, fill=baby, shape="7"),size=3.5,alpha=0.2) + 
+  geom_point(aes(x=section, y=len2_8_perc, fill=baby, shape="8"),size=3.5,alpha=0.2) + 
+  geom_point(aes(x=section, y=len2_2_perc, fill=baby, shape="2"),size=3.5,alpha=0.2) + 
+  scale_shape_manual("Phonemic length", values=c(`3`= 0, `4`= 3, `2` = 6, `5` = 2,
+                                        `6` = 1, `7` = 4, `8` = 5),
+                        breaks= c("3", "4","5" , "2", "6", "7", "8"))+
+  scale_y_continuous(limits=c(0, 50), breaks=seq(0, 50, by = 10))+
+  guides(fill=FALSE, alpha=F)+
+  geom_smooth(aes(x=section, y=len2_3_perc,linetype="3"), fill=NA, colour="black", method="lm",size=1)+
+  geom_smooth(aes(x=section, y=len2_4_perc,linetype="4"), fill=NA, colour="black", method="lm",size=1)+
+  geom_smooth(aes(x=section, y=len2_5_perc,linetype="5"), fill=NA, colour="black", method="lm",size=1)+
+  geom_smooth(aes(x=section, y=len2_6_perc,linetype="6"), fill=NA, colour="black", method="lm",size=1)+
+  geom_smooth(aes(x=section, y=len2_7_perc,linetype="7"), fill=NA, colour="black", method="lm",size=1)+
+  geom_smooth(aes(x=section, y=len2_8_perc,linetype="8"), fill=NA, colour="black", method="lm",size=1)+
+  geom_smooth(aes(x=section, y=len2_2_perc,linetype="2"), fill=NA, colour="black", method="lm",size=1)+
+ theme(axis.text=element_text(size=18),  
+        axis.title = element_text(size=30),
+        legend.text = element_text(size = 20),         
+        legend.title = element_text(size = 20),  
+        strip.text = element_text(size=35),
+        legend.key.size = unit(2, "cm"),
+        axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)))+     
+  scale_colour_grey(start = 0, end = .9)+
+  scale_linetype_manual("Phonemic length", values=c(`3`= "dotted", `4`= "solid", `2`= "4C88C488", `5` = "dashed",
+                                        `6` = "12345678", `7` = "1F", `8` = "dotdash"),
+                        breaks= c("3", "4", "5","2", "6", "7", "8")) +
+  facet_wrap(vars(dataset))
+```
+**Figure .** Cumulative proportion of word types by phonemic length at each stage of the mothers random samples.
+
+<br>
+
+### 2.1.3 PP
+
+IPhOD Weighted phonotactic probability measure based on written log (base 10) word frequencies from the [SUBTLEXus database](https://www.ugent.be/pp/experimentele-psychologie/en/research/documents/subtlexus) (Brysbaert & New, 2009). 
+
+<br>
+
+#### Quantiles table
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+pp_qu_subtlex_us %>%
+  as.matrix() %>%
+  t() %>%
+  kable()
+```
+
+<br>
+
+```{r 213_pp, echo = FALSE, results='asis', fig.width=16, fig.height=9}
+chi_uni_on_subtlex_us %>% 
+  mutate(dataset = "Children") %>%
+  select(baby, section, ph_pr_qu1_perc:ph_pr_qu3_perc, dataset) %>%
+  rbind(mot_uni_on_subtlex_us_random$df_10 %>%
+          mutate(dataset = "Mothers") %>%
+  select(baby, section, ph_pr_qu1_perc:ph_pr_qu3_perc, dataset)) %>%
+  rbind(mod_on_subtlex_us %>%
+          mutate(dataset = "Models") %>%
+  select(baby, section, ph_pr_qu1_perc:ph_pr_qu3_perc, dataset)) %>% 
+  mutate(dataset = factor(dataset, 
+                          levels=c("Mothers","Children","Models"), 
+                          labels=c("Mothers","Children","Models"))) %>%
+  ggplot(aes(x=section, y=ph_pr_qu1_perc, fill=baby, shape="T1")) + 
+  geom_point(size=4, alpha=0.2) +
+  scale_x_continuous(breaks=c(1, seq(5,20, 5))) +
+  labs(x = "Stage", y = "Word types (%)") +
+  ggtitle("") +
+  theme(plot.title = element_text(hjust = 0.5, size = 25)) +
+  geom_point(aes(x=section, y=ph_pr_qu2_perc, fill=baby, shape="T2"),size=4, alpha=0.2) + 
+  geom_point(aes(x=section, y=ph_pr_qu3_perc, fill=baby, shape="T3"), size=4,alpha=0.2) + 
+  scale_shape_manual("PP tertile", values=c(`T1`= 0, `T2`= 3, `T3` = 2),
+                     breaks=c("T1","T2", "T3"))+
+  scale_y_continuous(limits=c(0, 70), breaks=seq(0, 70, by = 10))+
+  guides(fill=FALSE)+
+  geom_smooth(aes(x=section, y=ph_pr_qu1_perc,linetype="T1"), fill=NA, colour="black", method="lm", size=0.8)+
+  geom_smooth(aes(x=section, y=ph_pr_qu2_perc,linetype="T2"), fill=NA, colour="black", method="lm", size=0.8)+
+  geom_smooth(aes(x=section, y=ph_pr_qu3_perc,linetype="T3"), fill=NA, colour="black", method="lm", size=0.8)+
+  theme(axis.text=element_text(size=18),  
+        axis.title = element_text(size=30),
+        legend.text = element_text(size = 20),         
+        legend.title = element_text(size = 20),  
+        strip.text = element_text(size=35),
+        legend.key.size = unit(2, "cm"),
+        axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)))+    
+    scale_colour_grey(start = 0, end = .9)+
+  scale_linetype_manual("PP tertile", 
+                        values=c(`T1` = "longdash",`T2` = "solid", `T3`= "dotted"),
+                        breaks=c("T1","T2", "T3")) +
+  facet_grid(cols = vars(dataset))
+```
+
+**Figure .** Breakdown of PP by tertile. **Mothers random sample number 10 is used**
+
+<br>
+
+```{r 213_pp_random, echo = FALSE, results='asis', fig.width=16, fig.height=14}
+mot_uni_on_subtlex_us_random$df_1 %>% 
+  mutate(dataset = "Mothers 1") %>%
+  select(baby, section, ph_pr_qu1_perc:ph_pr_qu3_perc, dataset) %>%
+  rbind(mot_uni_on_subtlex_us_random$df_2 %>%
+          mutate(dataset = "Mothers 2") %>%
+  select(baby, section, ph_pr_qu1_perc:ph_pr_qu3_perc, dataset)) %>%
+  rbind(mot_uni_on_subtlex_us_random$df_3 %>%
+          mutate(dataset = "Mothers 3") %>%
+  select(baby, section, ph_pr_qu1_perc:ph_pr_qu3_perc, dataset)) %>%
+  rbind(mot_uni_on_subtlex_us_random$df_4 %>%
+          mutate(dataset = "Mothers 4") %>%
+  select(baby, section, ph_pr_qu1_perc:ph_pr_qu3_perc, dataset)) %>%
+  rbind(mot_uni_on_subtlex_us_random$df_5 %>%
+          mutate(dataset = "Mothers 5") %>%
+  select(baby, section, ph_pr_qu1_perc:ph_pr_qu3_perc, dataset)) %>%
+  rbind(mot_uni_on_subtlex_us_random$df_6 %>%
+          mutate(dataset = "Mothers 6") %>%
+  select(baby, section, ph_pr_qu1_perc:ph_pr_qu3_perc, dataset)) %>%
+  rbind(mot_uni_on_subtlex_us_random$df_7 %>%
+          mutate(dataset = "Mothers 7") %>%
+  select(baby, section, ph_pr_qu1_perc:ph_pr_qu3_perc, dataset)) %>%
+  rbind(mot_uni_on_subtlex_us_random$df_8 %>%
+          mutate(dataset = "Mothers 8") %>%
+  select(baby, section, ph_pr_qu1_perc:ph_pr_qu3_perc, dataset)) %>%
+  rbind(mot_uni_on_subtlex_us_random$df_9 %>%
+          mutate(dataset = "Mothers 9") %>%
+  select(baby, section, ph_pr_qu1_perc:ph_pr_qu3_perc, dataset)) %>%
+  rbind(mot_uni_on_subtlex_us_random$df_10 %>%
+          mutate(dataset = "Mothers 10") %>%
+  select(baby, section, ph_pr_qu1_perc:ph_pr_qu3_perc, dataset)) %>%
+  mutate(dataset = factor(dataset, 
+                          levels=c("Mothers 1","Mothers 2","Mothers 3",
+                                   "Mothers 4","Mothers 5","Mothers 6",
+                                   "Mothers 7","Mothers 8","Mothers 9",
+                                   "Mothers 10"), 
+                          labels=c("Mothers 1","Mothers 2","Mothers 3",
+                                   "Mothers 4","Mothers 5","Mothers 6",
+                                   "Mothers 7","Mothers 8","Mothers 9",
+                                   "Mothers 10"))) %>%
+  ggplot(aes(x=section, y=ph_pr_qu1_perc, fill=baby, shape="T1")) + 
+  geom_point(size=4, alpha=0.2) +
+  scale_x_continuous(breaks=c(1, seq(5,20, 5))) +
+  labs(x = "Stage", y = "Word types (%)") +
+  ggtitle("") +
+  theme(plot.title = element_text(hjust = 0.5, size = 25)) +
+  geom_point(aes(x=section, y=ph_pr_qu2_perc, fill=baby, shape="T2"),size=4, alpha=0.2) + 
+  geom_point(aes(x=section, y=ph_pr_qu3_perc, fill=baby, shape="T3"), size=4,alpha=0.2) + 
+  scale_shape_manual("PP tertile", values=c(`T1`= 0, `T2`= 3, `T3` = 2),
+                     breaks=c("T1","T2", "T3"))+
+  scale_y_continuous(limits=c(0, 70), breaks=seq(0, 70, by = 10))+
+  guides(fill=FALSE)+
+  geom_smooth(aes(x=section, y=ph_pr_qu1_perc,linetype="T1"), fill=NA, colour="black", method="lm", size=0.8)+
+  geom_smooth(aes(x=section, y=ph_pr_qu2_perc,linetype="T2"), fill=NA, colour="black", method="lm", size=0.8)+
+  geom_smooth(aes(x=section, y=ph_pr_qu3_perc,linetype="T3"), fill=NA, colour="black", method="lm", size=0.8)+
+  theme(axis.text=element_text(size=18),  
+        axis.title = element_text(size=30),
+        legend.text = element_text(size = 20),         
+        legend.title = element_text(size = 20),  
+        strip.text = element_text(size=35),
+        legend.key.size = unit(2, "cm"),
+        axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)))+    
+    scale_colour_grey(start = 0, end = .9)+
+  scale_linetype_manual("PP tertile", 
+                        values=c(`T1` = "longdash",`T2` = "solid", `T3`= "dotted"),
+                        breaks=c("T1","T2", "T3")) +
+  facet_wrap(vars(dataset))
+```
+
+**Figure .** Breakdown of PP by tertile at each stage of maternal random samples. 
+
+<br>
+
+### 2.1.4 ND
+
+<br>
+
+#### Quantiles table
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+nei_qu %>%
+  as.matrix() %>%
+  t() %>%
+  kable()
+```
+
+<br>
+
+```{r 214_nd, echo = FALSE, results='asis', fig.width=16, fig.height=9}
+chi_nei_on %>% 
+  mutate(dataset = "Children") %>%
+  select(baby, section, nei_qu1_perc:nei_qu3_perc, dataset) %>%
+  rbind(mot_nei_on_random$df_10 %>%
+          mutate(dataset = "Mothers") %>%
+  select(baby, section, nei_qu1_perc:nei_qu3_perc, dataset)) %>%
+  rbind(mod_nei_on %>%
+          mutate(dataset = "Models") %>%
+  select(baby, section, nei_qu1_perc:nei_qu3_perc, dataset)) %>% 
+  mutate(dataset = factor(dataset, 
+                          levels=c("Mothers","Children","Models"), 
+                          labels=c("Mothers","Children","Models"))) %>%
+  ggplot(aes(x=section, y=nei_qu1_perc, fill=baby, shape="T1")) + 
+  geom_point(size=4, alpha=0.2) +
+  scale_x_continuous(breaks=c(1, seq(5,20, 5))) +
+  labs(x = "Stage", y = "Word types (%)") +
+  ggtitle("") +
+  theme(plot.title = element_text(hjust = 0.5, size = 25)) +
+  geom_point(aes(x=section, y=nei_qu2_perc, fill=baby, shape="T2"), size=4,alpha=0.2) + 
+  geom_point(aes(x=section, y=nei_qu3_perc, fill=baby, shape="T3"), size=4,alpha=0.2) + 
+  scale_shape_manual("ND tertile", values=c(`T1`= 0, `T2`= 3, `T3` = 2),
+                     breaks=c("T3","T2","T1"))+
+  scale_y_continuous(limits=c(0, 100), breaks=seq(0, 100, by = 20))+
+  guides(fill=FALSE)+
+  geom_smooth(aes(x=section, y=nei_qu1_perc,linetype="T1"), 
+              fill=NA, colour="black", method="lm", size=0.8) +
+  geom_smooth(aes(x=section, y=nei_qu2_perc,linetype="T2"), 
+              fill=NA, colour="black", method="lm", size=0.8) +
+  geom_smooth(aes(x=section, y=nei_qu3_perc,linetype="T3"), 
+              fill=NA, colour="black", method="lm", size=0.8) +
+  theme(axis.text=element_text(size=18),  
+        axis.title = element_text(size=30),
+        legend.text = element_text(size = 20),         
+        legend.title = element_text(size = 20),  
+        strip.text = element_text(size=35),
+        legend.key.size = unit(2, "cm"),
+        axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)))+    
+    scale_colour_grey(start = 0, end = .9) +
+  scale_linetype_manual("ND tertile", 
+                        values=c(`T1` = "longdash",
+                                 `T2` = "solid", `T3`= "dotted"), 
+                        breaks=c("T3","T2","T1")) +
+  facet_grid(cols = vars(dataset))
+```
+
+**Figure .** Breakdown of ND by tertile. **Mothers random sample number 10 is used**
+
+<br>
+
+```{r 214_nd_random, echo = FALSE, results='asis', fig.width=16, fig.height=14}
+mot_nei_on_random$df_1 %>% 
+  mutate(dataset = "Mothers 1") %>%
+  select(baby, section, nei_qu1_perc:nei_qu3_perc, dataset) %>%
+  rbind(mot_nei_on_random$df_2 %>%
+          mutate(dataset = "Mothers 2") %>%
+  select(baby, section, nei_qu1_perc:nei_qu3_perc, dataset)) %>%
+  rbind(mot_nei_on_random$df_3 %>%
+          mutate(dataset = "Mothers 3") %>%
+  select(baby, section, nei_qu1_perc:nei_qu3_perc, dataset)) %>%
+  rbind(mot_nei_on_random$df_4 %>%
+          mutate(dataset = "Mothers 4") %>%
+  select(baby, section, nei_qu1_perc:nei_qu3_perc, dataset)) %>%
+  rbind(mot_nei_on_random$df_5 %>%
+          mutate(dataset = "Mothers 5") %>%
+  select(baby, section, nei_qu1_perc:nei_qu3_perc, dataset)) %>%
+  rbind(mot_nei_on_random$df_6 %>%
+          mutate(dataset = "Mothers 6") %>%
+  select(baby, section, nei_qu1_perc:nei_qu3_perc, dataset)) %>%
+  rbind(mot_nei_on_random$df_7 %>%
+          mutate(dataset = "Mothers 7") %>%
+  select(baby, section, nei_qu1_perc:nei_qu3_perc, dataset)) %>%
+  rbind(mot_nei_on_random$df_8 %>%
+          mutate(dataset = "Mothers 8") %>%
+  select(baby, section, nei_qu1_perc:nei_qu3_perc, dataset)) %>%
+  rbind(mot_nei_on_random$df_9 %>%
+          mutate(dataset = "Mothers 9") %>%
+  select(baby, section, nei_qu1_perc:nei_qu3_perc, dataset)) %>%
+  rbind(mot_nei_on_random$df_10 %>%
+          mutate(dataset = "Mothers 10") %>%
+  select(baby, section, nei_qu1_perc:nei_qu3_perc, dataset)) %>%
+  mutate(dataset = factor(dataset, 
+                          levels=c("Mothers 1","Mothers 2","Mothers 3",
+                                   "Mothers 4","Mothers 5","Mothers 6",
+                                   "Mothers 7","Mothers 8","Mothers 9",
+                                   "Mothers 10"), 
+                          labels=c("Mothers 1","Mothers 2","Mothers 3",
+                                   "Mothers 4","Mothers 5","Mothers 6",
+                                   "Mothers 7","Mothers 8","Mothers 9",
+                                   "Mothers 10"))) %>%
+  ggplot(aes(x=section, y=nei_qu1_perc, fill=baby, shape="T1")) + 
+  geom_point(size=4, alpha=0.2) +
+  scale_x_continuous(breaks=c(1, seq(5,20, 5))) +
+  labs(x = "Stage", y = "Word types (%)") +
+  ggtitle("") +
+  theme(plot.title = element_text(hjust = 0.5, size = 25)) +
+  geom_point(aes(x=section, y=nei_qu2_perc, fill=baby, shape="T2"), size=4,alpha=0.2) + 
+  geom_point(aes(x=section, y=nei_qu3_perc, fill=baby, shape="T3"), size=4,alpha=0.2) + 
+  scale_shape_manual("ND tertile", values=c(`T1`= 0, `T2`= 3, `T3` = 2),
+                     breaks=c("T3","T2","T1"))+
+  scale_y_continuous(limits=c(0, 100), breaks=seq(0, 100, by = 20))+
+  guides(fill=FALSE)+
+  geom_smooth(aes(x=section, y=nei_qu1_perc,linetype="T1"), 
+              fill=NA, colour="black", method="lm", size=0.8) +
+  geom_smooth(aes(x=section, y=nei_qu2_perc,linetype="T2"), 
+              fill=NA, colour="black", method="lm", size=0.8) +
+  geom_smooth(aes(x=section, y=nei_qu3_perc,linetype="T3"), 
+              fill=NA, colour="black", method="lm", size=0.8) +
+  theme(axis.text=element_text(size=18),  
+        axis.title = element_text(size=30),
+        legend.text = element_text(size = 20),         
+        legend.title = element_text(size = 20),  
+        strip.text = element_text(size=35),
+        legend.key.size = unit(2, "cm"),
+        axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)))+    
+    scale_colour_grey(start = 0, end = .9) +
+  scale_linetype_manual("ND tertile", 
+                        values=c(`T1` = "longdash",
+                                 `T2` = "solid", `T3`= "dotted"), 
+                        breaks=c("T3","T2","T1")) +
+  facet_wrap(vars(dataset))
+```
+
+**Figure .** Breakdown of ND by tertile at each stage of the maternal random samples
+
+<br>
+
+### 2.1.5 Frequency
+
+IPhOD Frequency measure based on [SUBTLEXus](https://www.ugent.be/pp/experimentele-psychologie/en/research/documents/subtlexus) (Brysbaert & New, 2009). 
+Words that are not present in IPhOD have no frequency value and therefore were excluded.
+
+<br>
+
+#### Quantiles table
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+freq_qus %>%
+  as.matrix() %>%
+  t() %>%
+  kable()
+```
+
+<br>
+
+```{r 215_freq, echo = FALSE, results='asis', fig.width=16, fig.height=9}
+chi_uni_on_freq %>% 
+  mutate(dataset = "Children") %>%
+  select(baby, section, freq_qu1_perc:freq_qu3_perc, dataset) %>%
+  rbind(mot_uni_on_freq_random$df_10 %>%
+          mutate(dataset = "Mothers") %>%
+  select(baby, section, freq_qu1_perc:freq_qu3_perc, dataset)) %>%
+  rbind(mod_on_freq %>%
+          mutate(dataset = "Models") %>%
+  select(baby, section, freq_qu1_perc:freq_qu3_perc, dataset)) %>% 
+  mutate(dataset = factor(dataset, 
+                          levels=c("Mothers","Children","Models"), 
+                          labels=c("Mothers","Children","Models"))) %>%
+  ggplot(aes(x=section, y=freq_qu1_perc, fill=baby, shape="T1")) + 
+  geom_point(size=4, alpha=0.2) +
+  scale_x_continuous(breaks=c(1, seq(5,20, 5))) +
+  labs(x = "Stage", y = "Word types (%)") +
+  ggtitle("") +
+  theme(plot.title = element_text(hjust = 0.5, size = 25)) +
+  geom_point(aes(x=section, y=freq_qu2_perc, fill=baby, shape="T2"),size=4, alpha=0.2) + 
+  geom_point(aes(x=section, y=freq_qu3_perc, fill=baby, shape="T3"), size=4,alpha=0.2) + 
+  scale_shape_manual("Frequency\ntertile", values=c(`T1`= 0, `T2`= 3, `T3` = 2),
+                     breaks=c("T3", "T2","T1")) +
+  scale_y_continuous(limits=c(0, 100), breaks=seq(0, 100, by = 20)) +
+  guides(fill=FALSE)+
+  geom_smooth(aes(x=section, y=freq_qu1_perc,linetype="T1"), 
+              fill=NA, colour="black", method="lm", size=0.8) +
+  geom_smooth(aes(x=section, y=freq_qu2_perc,linetype="T2"), 
+              fill=NA, colour="black", method="lm", size=0.8) +
+  geom_smooth(aes(x=section, y=freq_qu3_perc,linetype="T3"), 
+              fill=NA, colour="black", method="lm", size=0.8) +
+  theme(axis.text=element_text(size=18),  
+        axis.title = element_text(size=30),
+        legend.text = element_text(size = 20),         
+        legend.title = element_text(size = 20),  
+        strip.text = element_text(size=35),
+        legend.key.size = unit(2, "cm"),
+        axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)))+     
+    scale_colour_grey(start = 0, end = .9) +
+  scale_linetype_manual("Frequency\ntertile", 
+                        values=c(`T1` = "longdash",
+                                 `T2` = "solid", `T3`= "dotted"),
+                        breaks=c("T3", "T2","T1")) +
+  facet_grid(cols = vars(dataset))
+```
+
+**Figure.** Breakdown of Frequency by tertile. **Mothers random sample number 10 is used**
+
+<br>
+
+```{r 215_freq_random, echo = FALSE, results='asis', fig.width=16, fig.height=14}
+mot_uni_on_freq_random$df_1 %>% 
+  mutate(dataset = "Mothers 1") %>%
+  select(baby, section, freq_qu1_perc:freq_qu3_perc, dataset) %>%
+  rbind(mot_uni_on_freq_random$df_2 %>%
+          mutate(dataset = "Mothers 2") %>%
+  select(baby, section, freq_qu1_perc:freq_qu3_perc, dataset)) %>%
+  rbind(mot_uni_on_freq_random$df_3 %>%
+          mutate(dataset = "Mothers 3") %>%
+  select(baby, section, freq_qu1_perc:freq_qu3_perc, dataset)) %>%
+  rbind(mot_uni_on_freq_random$df_4 %>%
+          mutate(dataset = "Mothers 4") %>%
+  select(baby, section, freq_qu1_perc:freq_qu3_perc, dataset)) %>%
+  rbind(mot_uni_on_freq_random$df_5 %>%
+          mutate(dataset = "Mothers 5") %>%
+  select(baby, section, freq_qu1_perc:freq_qu3_perc, dataset)) %>%
+  rbind(mot_uni_on_freq_random$df_6 %>%
+          mutate(dataset = "Mothers 6") %>%
+  select(baby, section, freq_qu1_perc:freq_qu3_perc, dataset)) %>%
+  rbind(mot_uni_on_freq_random$df_7 %>%
+          mutate(dataset = "Mothers 7") %>%
+  select(baby, section, freq_qu1_perc:freq_qu3_perc, dataset)) %>%
+  rbind(mot_uni_on_freq_random$df_8 %>%
+          mutate(dataset = "Mothers 8") %>%
+  select(baby, section, freq_qu1_perc:freq_qu3_perc, dataset)) %>%
+  rbind(mot_uni_on_freq_random$df_9 %>%
+          mutate(dataset = "Mothers 9") %>%
+  select(baby, section, freq_qu1_perc:freq_qu3_perc, dataset)) %>%
+  rbind(mot_uni_on_freq_random$df_10 %>%
+          mutate(dataset = "Mothers 10") %>%
+  select(baby, section, freq_qu1_perc:freq_qu3_perc, dataset)) %>%
+  mutate(dataset = factor(dataset, 
+                          levels=c("Mothers 1","Mothers 2","Mothers 3",
+                                   "Mothers 4","Mothers 5","Mothers 6",
+                                   "Mothers 7","Mothers 8","Mothers 9",
+                                   "Mothers 10"), 
+                          labels=c("Mothers 1","Mothers 2","Mothers 3",
+                                   "Mothers 4","Mothers 5","Mothers 6",
+                                   "Mothers 7","Mothers 8","Mothers 9",
+                                   "Mothers 10"))) %>%
+  ggplot(aes(x=section, y=freq_qu1_perc, fill=baby, shape="T1")) + 
+  geom_point(size=4, alpha=0.2) +
+  scale_x_continuous(breaks=c(1, seq(5,20, 5))) +
+  labs(x = "Stage", y = "Word types (%)") +
+  ggtitle("") +
+  theme(plot.title = element_text(hjust = 0.5, size = 25)) +
+  geom_point(aes(x=section, y=freq_qu2_perc, fill=baby, shape="T2"),size=4, alpha=0.2) + 
+  geom_point(aes(x=section, y=freq_qu3_perc, fill=baby, shape="T3"), size=4,alpha=0.2) + 
+  scale_shape_manual("Frequency\ntertile", values=c(`T1`= 0, `T2`= 3, `T3` = 2),
+                     breaks=c("T3", "T2","T1")) +
+  scale_y_continuous(limits=c(0, 100), breaks=seq(0, 100, by = 20)) +
+  guides(fill=FALSE)+
+  geom_smooth(aes(x=section, y=freq_qu1_perc,linetype="T1"), 
+              fill=NA, colour="black", method="lm", size=0.8) +
+  geom_smooth(aes(x=section, y=freq_qu2_perc,linetype="T2"), 
+              fill=NA, colour="black", method="lm", size=0.8) +
+  geom_smooth(aes(x=section, y=freq_qu3_perc,linetype="T3"), 
+              fill=NA, colour="black", method="lm", size=0.8) +
+  theme(axis.text=element_text(size=18),  
+        axis.title = element_text(size=30),
+        legend.text = element_text(size = 20),         
+        legend.title = element_text(size = 20),  
+        strip.text = element_text(size=35),
+        legend.key.size = unit(2, "cm"),
+        axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)))+     
+    scale_colour_grey(start = 0, end = .9) +
+  scale_linetype_manual("Frequency\ntertile", 
+                        values=c(`T1` = "longdash",
+                                 `T2` = "solid", `T3`= "dotted"),
+                        breaks=c("T3", "T2","T1")) +
+  facet_wrap(vars(dataset))
+```
+
+**Figure.** Breakdown of Frequency by tertile at each stage of the maternal random samples
+
+<br>
+
+
+## 2.2 Controlling for length
+
+### 2.2.1 PP at each phonemic length (proportions)
+
+```{r 221_pp_length, echo = FALSE, results='asis', fig.width=16, fig.height=9}
+table_prop <- function(list_dfs, df_label, var_name, phon_length, calculation = NULL) {
+  if (calculation == "pp") {
+    table <- list_dfs[[df_label]] %>%  
+      group_by(baby) %>%
+      summarise(sum(ph_pr_qu1), sum(ph_pr_qu2), sum(ph_pr_qu3)) %>%
+      ungroup()
+  } else if (calculation == "nd") {
+    table <- list_dfs[[df_label]] %>%  
+      group_by(baby) %>%
+      summarise(sum(nei_qu1), sum(nei_qu2), sum(nei_qu3)) %>%
+      ungroup()
+  } else if (calculation == "freq") {
+    table <- list_dfs[[df_label]] %>%  
+      group_by(baby) %>%
+      summarise(sum(freq_qu1), sum(freq_qu2), sum(freq_qu3)) %>%
+      ungroup()
+  }
+  
+table %>%
+    adorn_percentages() %>%
+    (function(x) {
+      colnames(x) <- c("baby", "T1", "T2", "T3")
+      x
+    }) %>%
+    gather("Tertile", "Word_types", -baby) %>%
+    mutate(Word_types = Word_types * 100,
+           Phonemic_length = phon_length) %>%
+    rename_at(vars(contains('Tertile')), 
+              funs(sub('Tertile', paste(var_name, "Tertile", sep="_"), .)))
+}
+
+plot_bars <- function(list_dfs, var_name, tertile_group = NULL, calculation = NULL) {
+  table <- table_prop(list_dfs, paste("chi_uni_", "len2", tertile_group, sep = ""),
+           var_name, 2, calculation = calculation) %>%
+  rbind(table_prop(list_dfs, paste("chi_uni_", "len3", tertile_group, sep = ""),
+               var_name, 3, calculation = calculation)) %>% 
+  rbind(table_prop(list_dfs, paste("chi_uni_", "len4", tertile_group, sep = ""),
+                   var_name, 4, calculation = calculation)) %>% 
+  rbind(table_prop(list_dfs, paste("chi_uni_", "len5", tertile_group, sep = ""),
+                   var_name, 5, calculation = calculation)) %>% 
+  rbind(table_prop(list_dfs, paste("chi_uni_", "len6", tertile_group, sep = ""),
+                   var_name, 6, calculation = calculation)) %>% 
+  mutate(df = "Children") %>%
+  rbind(table_prop(list_dfs, paste("mod_", "len2", tertile_group, sep = ""),
+             var_name, 2, calculation = calculation) %>%
+  rbind(table_prop(list_dfs, paste("mod_", "len3", tertile_group, sep = ""),
+                   var_name, 3, calculation = calculation)) %>% 
+  rbind(table_prop(list_dfs, paste("mod_", "len4", tertile_group, sep = ""),
+                   var_name, 4, calculation = calculation)) %>% 
+  rbind(table_prop(list_dfs, paste("mod_", "len5", tertile_group, sep = ""),
+                   var_name, 5, calculation = calculation)) %>% 
+  rbind(table_prop(list_dfs, paste("mod_", "len6", tertile_group, sep = ""),
+                   var_name, 6, calculation = calculation)) %>% 
+  mutate(df = "Models"))
+  
+  if (calculation == "pp") {
+    table %>%  
+      summarySE(measurevar="Word_types", 
+                groupvars=c("PP_Tertile","Phonemic_length", "df")) %>%
+    ggplot(aes(Phonemic_length, Word_types, group= PP_Tertile)) + 
+    geom_bar(aes(fill = PP_Tertile), stat = "identity", position =position_dodge())+
+    geom_errorbar(aes(ymin=Word_types-se, ymax=Word_types+se),
+                  width=.4,                    # Width of the error bars
+                  position=position_dodge(0.9)) +
+    scale_y_continuous(limits=c(0, 100), breaks=seq(0, 100, by = 20))+
+    scale_fill_grey(start = 0.5,end= 0.85)+
+    labs(x = "Phonemic length", y = "Word types (%)") +
+    guides(fill=guide_legend(title="PP tertile")) +
+    theme(axis.text=element_text(size=18),  
+          axis.title = element_text(size=30),
+          legend.text = element_text(size = 20),         
+          legend.title = element_text(size = 20),  
+          strip.text = element_text(size=35),
+          legend.key.size = unit(1, "cm"),
+          legend.spacing.x = unit(0.4, 'cm'),
+          axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)),
+          axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)))+     
+    facet_grid(rows = vars(df))
+  } else if (calculation == "nd") {
+    table %>%
+    summarySE(measurevar="Word_types", 
+              groupvars=c("ND_Tertile","Phonemic_length", "df")) %>%
+    ggplot(aes(Phonemic_length, Word_types, group= ND_Tertile)) + 
+    geom_bar(aes(fill = ND_Tertile), stat = "identity", position =position_dodge())+
+    geom_errorbar(aes(ymin=Word_types-se, ymax=Word_types+se),
+                  width=.4,
+                  position=position_dodge(0.9)) +
+    scale_y_continuous(limits=c(0, 100), breaks=seq(0, 100, by = 20))+
+    scale_fill_grey(start = 0.5,end= 0.85)+
+    labs(x = "Phonemic length", y = "Word types (%)") +
+    guides(fill=guide_legend(title="ND tertile")) +
+    theme(axis.text=element_text(size=18),  
+          axis.title = element_text(size=30),
+          legend.text = element_text(size = 20),         
+          legend.title = element_text(size = 20),  
+          strip.text = element_text(size=35),
+          legend.key.size = unit(1, "cm"),
+          legend.spacing.x = unit(0.4, 'cm'),
+          axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)),
+          axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)))+     
+    facet_grid(rows = vars(df))
+  } else if (calculation == "freq") {
+    table %>%  
+      summarySE(measurevar="Word_types", 
+                groupvars=c("freq_Tertile","Phonemic_length", "df")) %>%
+    ggplot(aes(Phonemic_length, Word_types, group= freq_Tertile)) + 
+    geom_bar(aes(fill = freq_Tertile), stat = "identity", position =position_dodge())+
+    geom_errorbar(aes(ymin=Word_types-se, ymax=Word_types+se),
+                  width=.4,                    # Width of the error bars
+                  position=position_dodge(0.9)) +
+    scale_y_continuous(limits=c(0, 100), breaks=seq(0, 100, by = 20))+
+    scale_fill_grey(start = 0.5,end= 0.85)+
+    labs(x = "Phonemic length", y = "Word types (%)") +
+    guides(fill=guide_legend(title="Frequency\ntertile")) +
+    theme(axis.text=element_text(size=18),  
+          axis.title = element_text(size=30),
+          legend.text = element_text(size = 20),         
+          legend.title = element_text(size = 20),  
+          strip.text = element_text(size=35),
+          legend.key.size = unit(1, "cm"),
+          legend.spacing.x = unit(0.4, 'cm'),
+          axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)),
+          axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)))+     
+    facet_grid(rows = vars(df))
+  }
+  
+}
+
+plot_bars(log_pp_lengths, "PP", "", "pp")
+```
+**Figure .** PP tertiles defined by grouping all words together regardless of length and then partitioning them into tertiles. Error bars indicate the Standard Error of the mean.
+
+<br>
+
+```{r 221_pp_length2, echo = FALSE, results='asis', fig.width=16, fig.height=9}
+plot_bars(log_pp_lengths, "PP", "b", "pp")
+```
+**Figure .** PP tertiles defined by grouping all words of a particular phonemic length and then partitioning them into tertiles. Error bars indicate the Standard Error of the mean.
+
+<br>
+
+### 2.2.2 ND at each phonemic length (proportions)
+
+```{r 222_nd_length, echo = FALSE, results='asis', fig.width=16, fig.height=9}
+plot_bars(nd_lengths, "ND", "", "nd")
+```
+**Figure .** ND tertiles defined by grouping all words together regardless of length and then partitioning them into tertiles. Error bars indicate the Standard Error of the mean.
+
+<br>
+
+```{r 222_nd_length2, echo = FALSE, results='asis', fig.width=16, fig.height=9}
+plot_bars(nd_lengths, "ND", "b", "nd")
+```
+**Figure .** ND tertiles defined by grouping all words of a particular phonemic length and then partitioning them into tertiles. Error bars indicate the Standard Error of the mean.
+
+<br>
+
+### 2.2.3 Frequency at each phonemic length (proportions)
+
+<br>
+
+```{r 223_freq_length, echo = FALSE, results='asis', fig.width=16, fig.height=9}
+plot_bars(freq_lengths, "freq", "", "freq")
+```
+**Figure .** Frequency tertiles defined by grouping all words together regardless of length and then partitioning them into tertiles. Error bars indicate the Standard Error of the mean. 
+
+<br>
+
+```{r 223_freq_length2, echo = FALSE, results='asis', fig.width=16, fig.height=9}
+plot_bars(freq_lengths, "freq", "b", "freq")
+```
+**Figure .** Frequency tertiles defined by grouping all words of a particular phonemic length and then partitioning them into tertiles. Error bars indicate the Standard Error of the mean.
+
+<br>
+
+## 2.3 Controlling for frequency
+
+### 2.3.1 PP at each frequency tertile (proportions)
+
+```{r 231_pp_freq, echo = FALSE, results='asis', fig.width=16, fig.height=9}
+table_prop <- function(list_dfs, df_label, var_name, frequency, calculation = NULL) {
+  if (calculation == "pp") {
+    table <- list_dfs[[df_label]] %>%  
+      group_by(baby) %>%
+      summarise(sum(ph_pr_qu1), sum(ph_pr_qu2), sum(ph_pr_qu3)) %>%
+      ungroup()
+  } else if (calculation == "nei") {
+    table <- list_dfs[[df_label]] %>%  
+      group_by(baby) %>%
+      summarise(sum(nei_qu1), sum(nei_qu2), sum(nei_qu3)) %>%
+      ungroup()
+  }
+  
+table %>%
+    adorn_percentages() %>%
+    (function(x) {
+      colnames(x) <- c("baby", "T1", "T2", "T3")
+      x
+    }) %>%
+    gather("Tertile", "Word_types", -baby) %>%
+    mutate(Word_types = Word_types * 100,
+           Frequency = frequency) %>%
+    rename_at(vars(contains('Tertile')), 
+              funs(sub('Tertile', paste(var_name, "Tertile", sep="_"), .)))
+}
+
+plot_bars <- function(list_dfs, var_name, tertile_group = NULL, calculation = NULL) {
+  table <- table_prop(list_dfs, paste("chi_", calculation, "_freq1", tertile_group, sep = ""),
+           var_name, 1, calculation = calculation) %>%
+  rbind(table_prop(list_dfs, paste("chi_", calculation, "_freq2", tertile_group, sep = ""),
+               var_name, 2, calculation = calculation)) %>% 
+  rbind(table_prop(list_dfs, paste("chi_", calculation, "_freq3", tertile_group, sep = ""),
+                   var_name, 3, calculation = calculation)) %>% 
+  mutate(df = "Children") %>%
+  rbind(table_prop(list_dfs, paste("mod_", calculation, "_freq1", tertile_group, sep = ""),
+             var_name, 1, calculation = calculation) %>%
+  rbind(table_prop(list_dfs, paste("mod_", calculation, "_freq2", tertile_group, sep = ""),
+                   var_name, 2, calculation = calculation)) %>% 
+  rbind(table_prop(list_dfs, paste("mod_", calculation, "_freq3", tertile_group, sep = ""),
+                   var_name, 3, calculation = calculation)) %>% 
+  mutate(df = "Models"))
+  
+  if (calculation == "pp") {
+    table %>%  
+      summarySE(measurevar="Word_types", 
+                groupvars=c("PP_Tertile","Frequency", "df")) %>%
+    ggplot(aes(Frequency, Word_types, group= PP_Tertile)) + 
+    geom_bar(aes(fill = PP_Tertile), stat = "identity", position =position_dodge())+
+    geom_errorbar(aes(ymin=Word_types-se, ymax=Word_types+se),
+                  width=.4,                    # Width of the error bars
+                  position=position_dodge(0.9)) +
+    scale_y_continuous(limits=c(0, 100), breaks=seq(0, 100, by = 20))+
+    scale_fill_grey(start = 0.5,end= 0.85)+
+    labs(x = "Frequency tertile", y = "Word types (%)") +
+    guides(fill=guide_legend(title="PP tertile")) +
+    theme(axis.text=element_text(size=18),  
+          axis.title = element_text(size=30),
+          legend.text = element_text(size = 20),         
+          legend.title = element_text(size = 20),  
+          strip.text = element_text(size=35),
+          legend.key.size = unit(1, "cm"),
+          legend.spacing.x = unit(0.4, 'cm'),
+          axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)),
+          axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)))+     
+    facet_grid(rows = vars(df))
+  } else if (calculation == "nei") {
+    table %>%
+    summarySE(measurevar="Word_types", 
+              groupvars=c("ND_Tertile","Frequency", "df")) %>%
+    ggplot(aes(Frequency, Word_types, group= ND_Tertile)) + 
+    geom_bar(aes(fill = ND_Tertile), stat = "identity", position =position_dodge())+
+    geom_errorbar(aes(ymin=Word_types-se, ymax=Word_types+se),
+                  width=.4,
+                  position=position_dodge(0.9)) +
+    scale_y_continuous(limits=c(0, 100), breaks=seq(0, 100, by = 20))+
+    scale_fill_grey(start = 0.5,end= 0.85)+
+    labs(x = "Frequency tertile", y = "Word types (%)") +
+    guides(fill=guide_legend(title="ND tertile")) +
+    theme(axis.text=element_text(size=18),  
+          axis.title = element_text(size=30),
+          legend.text = element_text(size = 20),         
+          legend.title = element_text(size = 20),  
+          strip.text = element_text(size=35),
+          legend.key.size = unit(1, "cm"),
+          legend.spacing.x = unit(0.4, 'cm'),
+          axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)),
+          axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)))+     
+    facet_grid(rows = vars(df))
+  } 
+}
+
+plot_bars(pp_freqs, "PP", "", "pp")
+```
+**Figure .** PP tertiles defined by grouping all words together regardless of Frequency and then partitioning them into tertiles. Error bars indicate the Standard Error of the mean. 
+
+<br>
+
+```{r 231_pp_freq2, echo = FALSE, results='asis', fig.width=16, fig.height=9}
+plot_bars(pp_freqs, "PP", "b", "pp")
+```
+**Figure .** PP tertiles defined by grouping all words of a particular Frequency tertile and then partitioning them into tertiles. Error bars indicate the Standard Error of the mean.
+
+<br>
+
+### 2.3.2 ND at each frequency tertile (proportions)
+
+```{r 232_nd_freq, echo = FALSE, results='asis', fig.width=16, fig.height=9}
+plot_bars(nei_freqs, "ND", "", "nei")
+```
+**Figure .** ND tertiles defined by grouping all words together regardless of Frequency and then partitioning them into tertiles. Error bars indicate the Standard Error of the mean. 
+
+<br>
+
+```{r 232_nd_freq2, echo = FALSE, results='asis', fig.width=16, fig.height=9}
+plot_bars(nei_freqs, "ND", "b", "nei")
+```
+**Figure .** PP tertiles defined by grouping all words of a particular Frequency tertile and then partitioning them into tertiles. Error bars indicate the Standard Error of the mean.
+
+<br>
+
