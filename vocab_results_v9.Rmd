@@ -13,7 +13,7 @@ lib <- c("plyr","tidyverse","knitr","gridExtra",
          "car","kableExtra", "magick", "grid",
          "magrittr", "janitor")
 lapply(lib, require, character.only = TRUE)
-load(file="ws6.RData")
+load(file="ws7.RData")
 
 options(knitr.table.format = 'markdown')
 ```
@@ -697,7 +697,7 @@ summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
 
 <br>
 
-Simple effects: children and models are now compared to 10 maternal random token samples matched with children's tokens.
+Simple effects: children and models are now compared to 10 maternal random samples. Maternal samples were created randomly excluding 1% of tokens from each stage until a mother's stage matched children's number of tokens at that stage.
 
 <br>
 
@@ -707,7 +707,7 @@ Bar charts: each bar showed a total sum before. Now they represent an average (u
 
 # 1. Basic results
 
-10 samples of the maternal input were created, randomly excluding 1% of word tokens from each stage (1 to 20) until a sample approximately matched children's total number of tokens. 
+10 samples of the maternal input were created, randomly excluding 1% of word tokens from each stage (1 to 20) until a sample approximately matched a child's number of tokens at that stage. 
 
 <br>
 
@@ -722,19 +722,17 @@ mot_counts <- function(df1, df2) {
          round(1) %>%
          paste(paste(",", df2 %>% 
          group_by(baby) %>% 
-         filter(row_number() == 1) %>% 
-         {.$mot_n_tokens %>% 
-             {(. / 1000) %>%
-                 round(1)}}, sep = " "), sep = "") %>%
+         summarize(mot_n_tokens = sum(mot_n_tokens)) %>% 
+           {.$mot_n_tokens / 1000} %>%
+           round(2), sep = " "), sep = "") %>%
     c(mean(df1$cum_uni[which(chi_uni$section == 20)] / 1000) %>%
         round(1) %>%
          paste(paste(",", df2 %>% 
          group_by(baby) %>% 
-         filter(row_number() == 1) %>% 
-         {.$mot_n_tokens %>% 
-             {(. / 1000) %>%
-                 round(1)}} %>%
-           mean(), sep = " "), sep = ""))
+         summarize(mot_n_tokens = sum(mot_n_tokens)) %>% 
+           {.$mot_n_tokens / 1000} %>%
+           mean() %>%
+           round(2), sep = " "), sep = ""))
 }
 
 
@@ -767,7 +765,7 @@ tibble(Subject = unique(chi_uni$baby),
 <br>
 
 #### Table 2
-t test comparing maternal sample and children's total number of tokens (N = 12). The values are the same for each comparison because the random samples have the same total number of tokens (however different word tokens populate the samples; see Table 1 and 3).
+t test comparing maternal sample and children's total number of tokens (N = 12). The values are the same for each comparison because the random samples have the same total number of tokens (however different word types populate the samples; see Table 1 and 3).
 
 ```{r echo = FALSE, results='asis', warning=FALSE}
 comparison_tokens <- function(df, df_num) {

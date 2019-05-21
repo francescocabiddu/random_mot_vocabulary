@@ -17,25 +17,25 @@ for (i in 1:10) {
     mot_na_baby_section %>%
     (function(x) {
       x %>%
-        left_join(., mot_chi_na %>% 
-                    filter(id == "CHI") %>% 
-                    group_by(baby) %>% 
-                    summarise(chi_n_tokens = string %>% 
-                                unlist() %>% length()),
-                  by = "baby")
+        left_join(., chi_na_id_sec %>% 
+                    rename(baby = id) %>%
+                    group_by(baby, section) %>% 
+                    summarise(chi_n_tokens = n()),
+                  by = c("baby", "section"))
     }) %>%
     (function(x) {
       matched_x <- x[0,]
       
       while(nrow(x) > 0) {
         x %<>%
-          group_by(baby) %>%
+          group_by(baby, section) %>%
           sample_frac(0.99, replace = FALSE) %>%
           ungroup() %>%
-          group_by(baby) %>%
+          group_by(baby, section) %>%
           mutate(mot_n_tokens = n()) %>%
           ungroup() %>%
-          mutate(token_comparison = mot_n_tokens - chi_n_tokens <= 200)
+          # small range given (less then 1% of tokens at a stage) to increase the match
+          mutate(token_comparison = mot_n_tokens - chi_n_tokens <= 20)
         
         matched_x <- rbind(matched_x, x %>% filter(token_comparison == TRUE))
         
@@ -219,7 +219,6 @@ mot_uni_random %<>%
     }, simplify = FALSE, USE.NAMES = TRUE)
   })
 
-mot_uni_on_subtlex_us
 #### PP ####
 # list of 10 maternal samples of word types 
 mot_uni_on_subtlex_us_random <- lapply(rep("mot_uni_on_subtlex_us", 10), function(x) {
